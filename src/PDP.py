@@ -6,6 +6,10 @@ from OcSystem import OcSystem
 
 
 class PDP:
+    optMethodStr: str  # a string for optimization method
+    muMomentum: float  # for Nesterov Accelerated Gradient method
+    velocityNesterov: np.array  # 1d numpy array, velocity for Nesterov
+
     def __init__(self, DynSystem, configDict):
         self.DynSystem = DynSystem
         self.OcSystem = OcSystem(DynSystem=DynSystem, configDict=configDict)
@@ -93,24 +97,41 @@ class PDP:
             self.thetaSingle, self.DynSystem.xGoal], [self.ddhdxdeSingle])
 
     def solve(self, initialState, desiredState, thetaInit, paraDict: dict):
+        self.desiredStateLoss = np.array([6.0, 0.1, 0.3])
+
+        # load the optimization function based on paraDict
+        self.loadOptFunction(paraDict)
+
+        # initialize some variables for optimization methods
+        if (self.optMethodStr == "Vanilla"):
+            pass
+        elif (self.optMethodStr == "Nesterov"):
+            # initialization for Nesterov
+            self.velocityNesterov = np.zeros(self.DynSystem.dimParameters)
+        else:
+            raise Exception("Wrong optimization method type!")
+
+        # visualize the initial theta
+        resultDict = self.OcSystem.solve(initialState, desiredState, thetaInit)
+        self.DynSystem.visualize(resultDict, initialState, desiredState, blockFlag=False)
+
         lossTraj = list()
         thetaTraj = list()
-
         thetaNow = thetaInit
         for idx in range(int(paraDict["maxIter"])):
-            
-            lossNow, thetaNext = self.gradientDescentVanilla(initialState, desiredState, thetaNow, paraDict)
-
+            lossNow, thetaNext = self.optFun(initialState, desiredState, thetaNow, paraDict)
             lossTraj.append(lossNow)
             thetaTraj.append(thetaNow)
-
             thetaNow = thetaNext
 
             if idx % 50 == 0:
                 print('Iter:', idx, ' loss:', lossNow)
 
         resultDict = self.OcSystem.solve(initialState, desiredState, thetaNow)
-        lossNow = self.lossFun(resultDict["xi"], thetaNow, desiredState).full()[0, 0]
+
+        # lossNow = self.lossFun(resultDict["xi"], thetaNow, desiredState).full()[0, 0]
+        lossNow = self.lossFun(resultDict["xi"], thetaNow, self.desiredStateLoss).full()[0, 0]
+
         lossTraj.append(lossNow)
         thetaTraj.append(thetaNow)
 
@@ -118,17 +139,63 @@ class PDP:
         print("Theta: ")
         print(thetaNow)
 
+
+        # remove loss singularities
+        lossTrajFiltered = list()
+        count = 0
+        for element in lossTraj:
+            if abs(element) < 1000:
+                lossTrajFiltered.append(element)
+            else:
+                count += 1
+        print("The number of loss singularities removed: ", count)
+
+
         # visualize
         self.DynSystem.visualize(resultDict, initialState, desiredState, blockFlag=False)
         # plot the loss
-        self.plotLossTraj(lossTraj, paraDict["maxIter"])
+        self.plotLossTraj(lossTraj, blockFlag=False)
+        # plot the loss without singularites
+        self.plotLossTraj(lossTrajFiltered)
 
+
+    def loadOptFunction(self, paraDict: dict):
+        """
+        Load the optimization function. Now support Vanilla gradient descent, Nesterov Momentum.
+        Input:
+            paraDict: a dictionary which includes the parameters.
+        
+        Usage:
+            # This is for Vanilla gradient descent
+            paraDict = {"stepSize": 0.01, "maxIter": 1000, "method": "Vanilla"}
+
+            # This is for Nesterov Momentum
+            paraDict = {"stepSize": 0.01, "maxIter": 1000, "method": "Nesterov", "mu": 0.9, "realLossFlag": False}
+
+            self.loadOptFunction(paraDict)
+        """
+        # the optimization method
+        self.optMethodStr = paraDict["method"]
+
+        if (self.optMethodStr == "Vanilla"):
+            self.optFun = lambda initialState, desiredState, thetaNow, paraDict:\
+                self.gradientDescentVanilla(initialState, desiredState, thetaNow, paraDict)
+        elif (self.optMethodStr == "Nesterov"):
+            self.muMomentum = paraDict["mu"]
+            self.optFun = lambda initialState, desiredState, thetaNow, paraDict:\
+                self.Nesterov(initialState, desiredState, thetaNow, paraDict)
+        else:
+            raise Exception("Wrong optimization method type!")
 
     def computeGradient(self, initialState, desiredState, thetaNow):
         resultDict = self.OcSystem.solve(initialState, desiredState, thetaNow)
         lqrSystem = self.getLqrSystem(resultDict, initialState, desiredState, thetaNow)
         resultLqr = self.solveLqr(lqrSystem)
-        lossNow = self.lossFun(resultDict["xi"], thetaNow, desiredState).full()[0, 0]
+
+
+        # lossNow = self.lossFun(resultDict["xi"], thetaNow, desiredState).full()[0, 0]
+        lossNow = self.lossFun(resultDict["xi"], thetaNow, self.desiredStateLoss).full()[0, 0]
+
 
         dLdXi = self.dLdXiFun(resultDict["xi"], thetaNow, desiredState)
         dXidTheta = np.vstack((np.concatenate(resultLqr["XTrajList"], axis=0),
@@ -140,9 +207,32 @@ class PDP:
         return lossNow, gradient
 
     def gradientDescentVanilla(self, initialState, desiredState, thetaNow, paraDict: dict):
+        """
+        Vanilla gradient descent method.
+        """
         lossNow, gradient = self.computeGradient(initialState, desiredState, thetaNow)
         thetaNext = thetaNow - paraDict["stepSize"] * gradient
         return lossNow, thetaNext
+
+    def Nesterov(self, initialState, desiredState, thetaNow, paraDict: dict):
+        """
+        Nesterov Accelerated Gradient method (NAG).
+        """
+        # compute the lookahead parameter
+        thetaMomentum = thetaNow + self.muMomentum * self.velocityNesterov
+        # compute the loss and gradient
+        lossNow, gradient = self.computeGradient(initialState, desiredState, thetaMomentum)
+        # update velocity vector for Nesterov
+        self.velocityNesterov = self.muMomentum * self.velocityNesterov - \
+            paraDict["stepSize"] * np.array(gradient)
+        # update the parameter
+        thetaNext = thetaNow + self.velocityNesterov
+
+        if paraDict["realLossFlag"]:
+            # compute the loss and gradient
+            lossNow, _ = self.computeGradient(initialState, desiredState, thetaNow)
+        return lossNow, thetaNext
+
 
     def getLqrSystem(self, resultDict: dict, initialState, desiredState, theta):
         """
@@ -327,12 +417,15 @@ class PDP:
                   "UTrajList": UTrajList}
         return result
 
-    def plotLossTraj(self, lossTraj, maxIter: int):
+    def plotLossTraj(self, lossTraj, blockFlag=True):
         _, ax1 = plt.subplots(1, 1)
-        ax1.plot(np.arange(maxIter+1), lossTraj, color="blue", linewidth=2)
+        ax1.plot(np.arange(len(lossTraj)), lossTraj, color="blue", linewidth=2)
         ax1.set_title("Loss")
         ax1.legend(["Loss"])
         ax1.set_xlabel("Iteration")
         ax1.set_ylabel("loss")
 
-        plt.show()
+        if blockFlag:
+            plt.show()
+        else:
+            plt.show(block=False)

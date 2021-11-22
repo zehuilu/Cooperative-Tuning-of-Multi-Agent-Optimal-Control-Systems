@@ -60,6 +60,7 @@ class OcSystem:
         MyProblem.add_option("sb", "yes")
         MyProblem.add_option("mu_strategy", "adaptive")
         MyProblem.add_option("hessian_approximation", "limited-memory")
+        MyProblem.add_option("max_iter", 1000)
         # MyProblem.add_option("derivative_test", "first-order")
         # MyProblem.add_option("derivative_test_perturbation", 1E-6)
 

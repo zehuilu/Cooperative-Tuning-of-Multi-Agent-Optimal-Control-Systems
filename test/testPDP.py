@@ -22,7 +22,7 @@ if __name__ == '__main__':
     theta = np.ones(MyPDP.DynSystem.dimParameters)
     # theta[-1] = 5.0  # for terminal cost
 
-    paraDict = {"stepSize": 1E-2,
-                "maxIter": 100}
+    # paraDict = {"stepSize": 0.01, "maxIter": 100, "method": "Vanilla"}
+    paraDict = {"stepSize": 0.10, "maxIter": 400, "method": "Nesterov", "mu": 0.9, "realLossFlag": False}
 
     MyPDP.solve(x0, xGoal, theta, paraDict=paraDict)
