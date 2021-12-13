@@ -104,9 +104,30 @@ class Unicycle:
             dynCons = casadi.vertcat(dynCons, currentCons)
         return dynCons
 
+    # def _lossFun(self, xAll, uAll, theta, xGoal):
+        # xFinal = xAll[-self.dimStates:]
+        # loss = (xFinal[0]-xGoal[0])**2 + (xFinal[1]-xGoal[1])**2
+        # return loss
+
     def _lossFun(self, xAll, uAll, theta, xGoal):
-        xFinal = xAll[-self.dimStates:]
-        loss = (xFinal[0]-xGoal[0])**2 + (xFinal[1]-xGoal[1])**2
+
+        # def _lossSingle(xNow):
+            # loss = casadi.pi*(3*xNow[0]**2-16*xNow[0]+3*xNow[1]**2-20*xNow[1]+63)
+            # return loss
+
+        def _lossSingle(xNow):
+            loss = 0.5*casadi.pi*(6*xNow[0]**2-18*xNow[0]+6*xNow[1]**2-14*xNow[1]+29)
+            return loss
+
+        loss = 0.0
+        # the stage loss from t=1 to t=T-1
+        #for idx in range(1, self.horizonSteps):
+            #xNow = xAll[self.dimStates*(idx-1) : self.dimStates*idx]
+            #uNow = uAll[self.dimInputs*idx : self.dimInputs*(idx+1)]
+            #loss += _lossSingle(xNow) + (uNow[0] ** 2 + uNow[1] ** 2)
+
+        xTerminal = xAll[self.dimStatesAll-self.dimStates:]
+        loss += _lossSingle(xTerminal)
         return loss
 
     def visualize(self, resultDict, initialState, desiredState, blockFlag=True):

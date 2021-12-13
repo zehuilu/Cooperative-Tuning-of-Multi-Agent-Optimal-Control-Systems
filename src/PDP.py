@@ -119,13 +119,22 @@ class PDP:
         thetaTraj = list()
         thetaNow = thetaInit
         for idx in range(int(paraDict["maxIter"])):
-            lossNow, thetaNext = self.optFun(initialState, desiredState, thetaNow, paraDict)
+
+            lossNow, thetaNext, _ = self.optFun(initialState, desiredState, thetaNow, paraDict)
+
+            #if lossNow > 1E3:
+                #break
+
             lossTraj.append(lossNow)
             thetaTraj.append(thetaNow)
             thetaNow = thetaNext
 
-            if idx % 50 == 0:
-                print('Iter:', idx, ' loss:', lossNow)
+            # if idx % 50 == 0:
+                # print('Iter:', idx, ' loss:', lossNow)
+
+            print('Iter:', idx, ' loss:', lossNow)
+
+        # thetaNow = thetaTraj[-1]
 
         resultDict = self.OcSystem.solve(initialState, desiredState, thetaNow)
 
@@ -135,7 +144,7 @@ class PDP:
         lossTraj.append(lossNow)
         thetaTraj.append(thetaNow)
 
-        print('Iter:', paraDict["maxIter"], ' loss:', lossNow)
+        print('Iter:', idx-1, ' loss:', lossNow)
         print("Theta: ")
         print(thetaNow)
 
@@ -212,7 +221,7 @@ class PDP:
         """
         lossNow, gradient = self.computeGradient(initialState, desiredState, thetaNow)
         thetaNext = thetaNow - paraDict["stepSize"] * gradient
-        return lossNow, thetaNext
+        return lossNow, thetaNext, thetaNow
 
     def Nesterov(self, initialState, desiredState, thetaNow, paraDict: dict):
         """
@@ -231,7 +240,7 @@ class PDP:
         if paraDict["realLossFlag"]:
             # compute the loss and gradient
             lossNow, _ = self.computeGradient(initialState, desiredState, thetaNow)
-        return lossNow, thetaNext
+        return lossNow, thetaNext, thetaNow
 
 
     def getLqrSystem(self, resultDict: dict, initialState, desiredState, theta):
