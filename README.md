@@ -1,5 +1,5 @@
-# Multi-Agent-Pontryagin-Differentiable-Programming
-This is Multi-Agent Pontryagin Differentiable Programming (PDP).
+# Cooperative Tuning of Multi-Agent Optimal Control Systems
+This is Cooperative Tuning of Multi-Agent Optimal Control Systems.
 
 Dependency:
  * Casadi
