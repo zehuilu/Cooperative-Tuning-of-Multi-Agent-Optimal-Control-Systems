@@ -70,7 +70,7 @@ class OcSystem:
             cl=cl,
             cu=cu)
 
-        MyProblem.add_option("print_level", 5)
+        MyProblem.add_option("print_level", 0)
         MyProblem.add_option("sb", "yes")
         MyProblem.add_option("mu_strategy", "adaptive")
         MyProblem.add_option("hessian_approximation", "limited-memory")
@@ -97,7 +97,7 @@ class OcSystem:
                       "xDecision": xDecision,
                       "xi": xi}
 
-        print("costateTraj size: ", costateTraj.shape)
+        # print("costateTraj size: ", costateTraj.shape)
 
         return resultDict
 
@@ -130,8 +130,8 @@ class OcSystem:
             xNow = xNext
         xDecision = np.concatenate((xAll, uAll))
 
-        norm_check = np.linalg.norm(self.eqConstraintsFun(xDecision))
-        print("starting point equality constraint check (should be zero): ", norm_check)
+        # norm_check = np.linalg.norm(self.eqConstraintsFun(xDecision))
+        # print("starting point equality constraint check (should be zero): ", norm_check)
 
         return xDecision
 

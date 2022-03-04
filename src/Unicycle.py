@@ -65,7 +65,6 @@ class Unicycle:
 
         self.dynConstraintsFun = casadi.Function("dynConstraints", [xAll, uAll], [self._dynConstraints(xAll, uAll)])
 
-
     def _costFun(self, xAll, uAll, theta):
         cost = 0.0
         # the stage cost from t=0 to t=T-1
@@ -85,7 +84,7 @@ class Unicycle:
         return cost
     
     def _terminalCostFun(self, xNow, theta):
-        cost = 100 * ((xNow[0]-theta[0])**2 + (xNow[1]-theta[1])**2)
+        cost = 10 * ((xNow[0]-theta[0])**2 + (xNow[1]-theta[1])**2)
         return cost
 
     def _dynConstraints(self, xAll, uAll):
@@ -100,7 +99,11 @@ class Unicycle:
 
     def _lossFun(self, xAll, uAll, theta):
         xTerminal = xAll[self.dimStatesAll-self.dimStates:]
-        loss = ((xTerminal[0]-theta[0]) ** 2 + (xTerminal[1]-theta[1]) ** 2)
+        # loss = ((xTerminal[0]-theta[0]) ** 2 + (xTerminal[1]-theta[1]) ** 2)
+
+        # for testing only
+        loss = 10 * ((xTerminal[0]-(-0.8)) ** 2 + (xTerminal[1]-(-0.2)) ** 2)
+
         return loss
 
     def visualize(self, resultDict, initialState, theta, blockFlag=True):

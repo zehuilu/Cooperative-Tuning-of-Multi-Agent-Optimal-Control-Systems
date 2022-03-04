@@ -9,96 +9,91 @@ class PDP:
     optMethodStr: str  # a string for optimization method
     muMomentum: float  # for Nesterov Accelerated Gradient method
     velocityNesterov: np.array  # 1d numpy array, velocity for Nesterov
+    matI: np.array  # 2d numpy array, identity matrix
 
     def __init__(self, DynSystem, configDict):
         self.DynSystem = DynSystem
         self.OcSystem = OcSystem(DynSystem=DynSystem, configDict=configDict)
         self.configDict = configDict
 
-        self.xXi = casadi.SX.sym("xXi", (self.DynSystem.horizonSteps+1) * self.DynSystem.dimStates)
-        self.uXi = casadi.SX.sym("uXi", self.DynSystem.horizonSteps * self.DynSystem.dimInputs)
+        self.xXi = casadi.SX.sym("xXi", self.DynSystem.dimStatesAll)
+        self.uXi = casadi.SX.sym("uXi", self.DynSystem.dimInputsAll)
         self.xi = casadi.vertcat(self.xXi, self.uXi)
+        self.matI = np.eye(self.DynSystem.dimStates)  # identity matrix
 
         self.diffPMP()
 
     def diffPMP(self):
         # define the Hamiltonian function
         self.costates = casadi.SX.sym("lambda", self.DynSystem.dimStates)
-        self.thetaSingle = casadi.SX.sym("thetaSingle", 1)
+        self.theta = self.DynSystem.theta
         # stage Hamiltonian
-        self.stageHamilton = self.DynSystem._stageCostFun(self.DynSystem.states, self.DynSystem.inputs,
-            self.thetaSingle, self.DynSystem.xGoal) + \
-            casadi.dot(self.DynSystem.discDynFun(self.DynSystem.states, self.DynSystem.inputs), self.costates)
+        self.stageHamilton = self.DynSystem._stageCostFun(self.DynSystem.states, self.DynSystem.inputs, self.theta) + \
+                             casadi.dot(self.DynSystem.discDynFun(self.DynSystem.states, self.DynSystem.inputs), self.costates)
         # terminal Hamiltonian
-        self.terminalHamilton = self.DynSystem._terminalCostFun(self.DynSystem.states, self.thetaSingle, self.DynSystem.xGoal)
+        self.terminalHamilton = self.DynSystem._terminalCostFun(self.DynSystem.states, self.theta)
 
         # loss function
-        self.loss = self.DynSystem._lossFun(self.xXi, self.uXi, self.DynSystem.theta, self.DynSystem.xGoal)
+        self.loss = self.DynSystem._lossFun(self.xXi, self.uXi, self.theta)
         self.dLdXi = casadi.jacobian(self.loss, self.xi)
-        self.dLdTheta = casadi.jacobian(self.loss, self.DynSystem.theta)
-        self.lossFun = casadi.Function("lossFun", [self.xi, self.DynSystem.theta, self.DynSystem.xGoal], [self.loss])
-        self.dLdXiFun = casadi.Function("dLdXiFun", [self.xi, self.DynSystem.theta, self.DynSystem.xGoal], [self.dLdXi])
-        self.dLdThetaFun = casadi.Function("dLdThetaFun", [self.xi, self.DynSystem.theta, self.DynSystem.xGoal], [self.dLdTheta])
+        self.dLdTheta = casadi.jacobian(self.loss, self.theta) # partial derivative
+        self.lossFun = casadi.Function("lossFun", [self.xi, self.theta], [self.loss])
+        self.dLdXiFun = casadi.Function("dLdXiFun", [self.xi, self.theta], [self.dLdXi])
+        # this is a function of partial derivative
+        self.dLdThetaFun = casadi.Function("dLdThetaFun", [self.xi, self.theta], [self.dLdTheta])
 
         # differentiating the dynamics
         self.dfdx = casadi.jacobian(self.DynSystem.discDyn, self.DynSystem.states)
         self.dfdu = casadi.jacobian(self.DynSystem.discDyn, self.DynSystem.inputs)
+        # de means derivative w.r.t. theta
         self.dfde = casadi.jacobian(self.DynSystem.discDyn, self.DynSystem.theta)
 
-        self.dfdxFun = casadi.Function("dfdxFun", [self.DynSystem.states, 
-            self.DynSystem.inputs, self.DynSystem.theta], [self.dfdx])
-        self.dfduFun = casadi.Function("dfduFun", [self.DynSystem.states,
-            self.DynSystem.inputs, self.DynSystem.theta], [self.dfdu])
-        self.dfdeFun = casadi.Function("dfdeFun", [self.DynSystem.states,
-            self.DynSystem.inputs, self.DynSystem.theta], [self.dfde])
+        self.dfdxFun = casadi.Function("dfdxFun", [self.DynSystem.states, self.DynSystem.inputs, self.theta], [self.dfdx])
+        self.dfduFun = casadi.Function("dfduFun", [self.DynSystem.states, self.DynSystem.inputs, self.theta], [self.dfdu])
+        self.dfdeFun = casadi.Function("dfdeFun", [self.DynSystem.states, self.DynSystem.inputs, self.theta], [self.dfde])
 
         # first-order derivatives of stage Hamiltonian, row vector
         self.dHdx = casadi.jacobian(self.stageHamilton, self.DynSystem.states).T
         self.dHdu = casadi.jacobian(self.stageHamilton, self.DynSystem.inputs).T
 
         self.dHdxFun = casadi.Function('dHdxFun', [self.DynSystem.states, self.DynSystem.inputs, 
-            self.costates, self.thetaSingle, self.DynSystem.xGoal], [self.dHdx])
+            self.costates, self.theta], [self.dHdx])
         self.dHduFun = casadi.Function('dHduFun', [self.DynSystem.states, self.DynSystem.inputs,
-            self.costates, self.thetaSingle, self.DynSystem.xGoal], [self.dHdu])
+            self.costates, self.theta], [self.dHdu])
 
         # second-order derivatives of stage Hamiltonian
         self.ddHdxdx = casadi.jacobian(self.dHdx, self.DynSystem.states)
         self.ddHdxdu = casadi.jacobian(self.dHdx, self.DynSystem.inputs)
-        self.ddHdxdeSingle = casadi.jacobian(self.dHdx, self.thetaSingle)
+        self.ddHdxde = casadi.jacobian(self.dHdx, self.theta)
         self.ddHdudx = casadi.jacobian(self.dHdu, self.DynSystem.states)
         self.ddHdudu = casadi.jacobian(self.dHdu, self.DynSystem.inputs)
-        self.ddHdudeSingle = casadi.jacobian(self.dHdu, self.thetaSingle)
+        self.ddHdude = casadi.jacobian(self.dHdu, self.theta)
 
         self.ddHdxdxFun = casadi.Function('ddHdxdxFun', [self.DynSystem.states, self.DynSystem.inputs, 
-            self.costates, self.thetaSingle, self.DynSystem.xGoal], [self.ddHdxdx])
+            self.costates, self.theta], [self.ddHdxdx])
         self.ddHdxduFun = casadi.Function('ddHdxduFun', [self.DynSystem.states, self.DynSystem.inputs, 
-            self.costates, self.thetaSingle, self.DynSystem.xGoal], [self.ddHdxdu])
-        self.ddHdxdeSingleFun = casadi.Function('ddHdxdeSingleFun', [self.DynSystem.states, self.DynSystem.inputs, 
-            self.costates, self.thetaSingle, self.DynSystem.xGoal], [self.ddHdxdeSingle])
+            self.costates, self.theta], [self.ddHdxdu])
+        self.ddHdxdeFun = casadi.Function('ddHdxdeFun', [self.DynSystem.states, self.DynSystem.inputs, 
+            self.costates, self.theta], [self.ddHdxde])
         self.ddHdudxFun = casadi.Function('ddHdudxFun', [self.DynSystem.states, self.DynSystem.inputs, 
-            self.costates, self.thetaSingle, self.DynSystem.xGoal], [self.ddHdudx])
+            self.costates, self.theta], [self.ddHdudx])
         self.ddHduduFun = casadi.Function('ddHduduFun', [self.DynSystem.states, self.DynSystem.inputs, 
-            self.costates, self.thetaSingle, self.DynSystem.xGoal], [self.ddHdudu])
-        self.ddHdudeSingleFun = casadi.Function('ddHdudeSingleFun', [self.DynSystem.states, self.DynSystem.inputs, 
-            self.costates, self.thetaSingle, self.DynSystem.xGoal], [self.ddHdudeSingle])
+            self.costates, self.theta], [self.ddHdudu])
+        self.ddHdudeFun = casadi.Function('ddHdudeFun', [self.DynSystem.states, self.DynSystem.inputs, 
+            self.costates, self.theta], [self.ddHdude])
 
         # first-order derivatives of terminal Hamiltonian, row vector
         self.dhdx = casadi.jacobian(self.terminalHamilton, self.DynSystem.states).T
-        self.dhdxFun = casadi.Function('dhdxFun', [self.DynSystem.states, 
-            self.thetaSingle, self.DynSystem.xGoal], [self.dhdx])
+        self.dhdxFun = casadi.Function('dhdxFun', [self.DynSystem.states, self.theta], [self.dhdx])
 
-        # second-order derivatives of stage Hamiltonian
+        # second-order derivatives of terminal Hamiltonian
         self.ddhdxdx = casadi.jacobian(self.dhdx, self.DynSystem.states)
-        self.ddhdxdeSingle = casadi.jacobian(self.dhdx, self.thetaSingle)
+        self.ddhdxde = casadi.jacobian(self.dhdx, self.theta)
 
-        self.ddhdxdxFun = casadi.Function('ddhdxdxFun', [self.DynSystem.states,
-            self.thetaSingle, self.DynSystem.xGoal], [self.ddhdxdx])
-        self.ddhdxdeSingleFun = casadi.Function('ddhdxdeSingleFun', [self.DynSystem.states,
-            self.thetaSingle, self.DynSystem.xGoal], [self.ddhdxdeSingle])
+        self.ddhdxdxFun = casadi.Function('ddhdxdxFun', [self.DynSystem.states, self.theta], [self.ddhdxdx])
+        self.ddhdxdeFun = casadi.Function('ddhdxdeFun', [self.DynSystem.states, self.theta], [self.ddhdxde])
 
-    def solve(self, initialState, desiredState, thetaInit, paraDict: dict):
-        self.desiredStateLoss = np.array([6.0, 0.1, 0.3])
-
+    def solve(self, initialState, thetaInit, paraDict: dict):
         # load the optimization function based on paraDict
         self.loadOptFunction(paraDict)
 
@@ -112,15 +107,15 @@ class PDP:
             raise Exception("Wrong optimization method type!")
 
         # visualize the initial theta
-        resultDict = self.OcSystem.solve(initialState, desiredState, thetaInit)
-        self.DynSystem.visualize(resultDict, initialState, desiredState, blockFlag=False)
+        resultDict = self.OcSystem.solve(initialState, thetaInit)
+        self.DynSystem.visualize(resultDict, initialState, thetaInit, blockFlag=False)
 
         lossTraj = list()
         thetaTraj = list()
         thetaNow = thetaInit
         for idx in range(int(paraDict["maxIter"])):
 
-            lossNow, thetaNext, _ = self.optFun(initialState, desiredState, thetaNow, paraDict)
+            lossNow, thetaNext, _ = self.optFun(initialState, thetaNow, paraDict)
 
             #if lossNow > 1E3:
                 #break
@@ -134,39 +129,35 @@ class PDP:
 
             print('Iter:', idx, ' loss:', lossNow)
 
-        # thetaNow = thetaTraj[-1]
+        resultDict = self.OcSystem.solve(initialState, thetaNow)
 
-        resultDict = self.OcSystem.solve(initialState, desiredState, thetaNow)
-
-        # lossNow = self.lossFun(resultDict["xi"], thetaNow, desiredState).full()[0, 0]
-        lossNow = self.lossFun(resultDict["xi"], thetaNow, self.desiredStateLoss).full()[0, 0]
+        lossNow = self.lossFun(resultDict["xi"], thetaNow).full()[0, 0]
 
         lossTraj.append(lossNow)
         thetaTraj.append(thetaNow)
 
-        print('Iter:', idx-1, ' loss:', lossNow)
-        print("Theta: ")
-        print(thetaNow)
-
+        print('Last one', ' loss:', lossNow)
+        print("Theta: ", thetaNow)
 
         # remove loss singularities
-        lossTrajFiltered = list()
-        count = 0
-        for element in lossTraj:
-            if abs(element) < 1000:
-                lossTrajFiltered.append(element)
-            else:
-                count += 1
-        print("The number of loss singularities removed: ", count)
-
+        # lossTrajFiltered = list()
+        # count = 0
+        # for element in lossTraj:
+        #     if abs(element) < 1000:
+        #         lossTrajFiltered.append(element)
+        #     else:
+        #         count += 1
+        # print("The number of loss singularities removed: ", count)
 
         # visualize
-        self.DynSystem.visualize(resultDict, initialState, desiredState, blockFlag=False)
+        self.DynSystem.visualize(resultDict, initialState, thetaNow, blockFlag=False)
         # plot the loss
         self.plotLossTraj(lossTraj, blockFlag=False)
-        # plot the loss without singularites
-        self.plotLossTraj(lossTrajFiltered)
 
+        # plot the loss without singularites
+        # self.plotLossTraj(lossTrajFiltered)
+
+        plt.show()
 
     def loadOptFunction(self, paraDict: dict):
         """
@@ -187,50 +178,48 @@ class PDP:
         self.optMethodStr = paraDict["method"]
 
         if (self.optMethodStr == "Vanilla"):
-            self.optFun = lambda initialState, desiredState, thetaNow, paraDict:\
-                self.gradientDescentVanilla(initialState, desiredState, thetaNow, paraDict)
+            self.optFun = lambda initialState, thetaNow, paraDict: \
+                self.gradientDescentVanilla(initialState, thetaNow, paraDict)
         elif (self.optMethodStr == "Nesterov"):
             self.muMomentum = paraDict["mu"]
-            self.optFun = lambda initialState, desiredState, thetaNow, paraDict:\
-                self.Nesterov(initialState, desiredState, thetaNow, paraDict)
+            self.optFun = lambda initialState, thetaNow, paraDict: \
+                self.Nesterov(initialState, thetaNow, paraDict)
         else:
             raise Exception("Wrong optimization method type!")
 
-    def computeGradient(self, initialState, desiredState, thetaNow):
-        resultDict = self.OcSystem.solve(initialState, desiredState, thetaNow)
-        lqrSystem = self.getLqrSystem(resultDict, initialState, desiredState, thetaNow)
+    def computeGradient(self, initialState, thetaNow):
+        resultDict = self.OcSystem.solve(initialState, thetaNow)
+        lqrSystem = self.getLqrSystem(resultDict, thetaNow)
         resultLqr = self.solveLqr(lqrSystem)
 
+        lossNow = self.lossFun(resultDict["xi"], thetaNow).full()[0, 0]
 
-        # lossNow = self.lossFun(resultDict["xi"], thetaNow, desiredState).full()[0, 0]
-        lossNow = self.lossFun(resultDict["xi"], thetaNow, self.desiredStateLoss).full()[0, 0]
-
-
-        dLdXi = self.dLdXiFun(resultDict["xi"], thetaNow, desiredState)
+        dLdXi = self.dLdXiFun(resultDict["xi"], thetaNow)
         dXidTheta = np.vstack((np.concatenate(resultLqr["XTrajList"], axis=0),
             np.concatenate(resultLqr["UTrajList"], axis=0)))
-        dLdTheta = self.dLdThetaFun(resultDict["xi"], thetaNow, desiredState)
-
+        # this is partial derivative
+        dLdTheta = self.dLdThetaFun(resultDict["xi"], thetaNow)
+        # this is full derivative
         gradient = np.array(np.dot(dLdXi, dXidTheta) + dLdTheta).flatten()
 
         return lossNow, gradient
 
-    def gradientDescentVanilla(self, initialState, desiredState, thetaNow, paraDict: dict):
+    def gradientDescentVanilla(self, initialState, thetaNow, paraDict: dict):
         """
         Vanilla gradient descent method.
         """
-        lossNow, gradient = self.computeGradient(initialState, desiredState, thetaNow)
+        lossNow, gradient = self.computeGradient(initialState, thetaNow)
         thetaNext = thetaNow - paraDict["stepSize"] * gradient
         return lossNow, thetaNext, thetaNow
 
-    def Nesterov(self, initialState, desiredState, thetaNow, paraDict: dict):
+    def Nesterov(self, initialState, thetaNow, paraDict: dict):
         """
         Nesterov Accelerated Gradient method (NAG).
         """
         # compute the lookahead parameter
         thetaMomentum = thetaNow + self.muMomentum * self.velocityNesterov
         # compute the loss and gradient
-        lossNow, gradient = self.computeGradient(initialState, desiredState, thetaMomentum)
+        lossNow, gradient = self.computeGradient(initialState, thetaMomentum)
         # update velocity vector for Nesterov
         self.velocityNesterov = self.muMomentum * self.velocityNesterov - \
             paraDict["stepSize"] * np.array(gradient)
@@ -239,11 +228,10 @@ class PDP:
 
         if paraDict["realLossFlag"]:
             # compute the loss and gradient
-            lossNow, _ = self.computeGradient(initialState, desiredState, thetaNow)
+            lossNow, _ = self.computeGradient(initialState, thetaNow)
         return lossNow, thetaNext, thetaNow
 
-
-    def getLqrSystem(self, resultDict: dict, initialState, desiredState, theta):
+    def getLqrSystem(self, resultDict: dict, theta):
         """
         xTraj: 2d numpy array, each row is the state at a time step
             [[state_0(0), state_1(0), state_2(0), ...],
@@ -271,59 +259,6 @@ class PDP:
         # Hue, dimInputs by dimParameters
         # hxe, dimStates by dimParameters
 
-
-
-
-
-        # xNow = xTraj[0, :]  # skip the initial condition
-        # uNow = uTraj[0, :]
-        # lambdaNext = costateTraj[0, :]
-        # dynF.append(np.zeros((self.DynSystem.dimStates, self.DynSystem.dimStates)))
-        # dynG.append(np.array(self.dfduFun(xNow, uNow, theta).full()))
-        # dynE.append(np.array(self.dfdeFun(xNow, uNow, theta).full()))
-
-        # Hxx.append(np.zeros((self.DynSystem.dimStates, self.DynSystem.dimStates)))
-        # Hxu.append(np.zeros((self.DynSystem.dimStates, self.DynSystem.dimInputs)))
-        # Hxe.append(np.zeros((self.DynSystem.dimStates, self.DynSystem.dimParameters)))
-        # Hux.append(np.zeros((self.DynSystem.dimInputs, self.DynSystem.dimStates)))
-        
-        # Huu.append(np.array(self.ddHduduFun(xNow, uNow, lambdaNext, theta[0], desiredState).full()))
-
-        # HueSingle = np.array(self.ddHdudeSingleFun(xNow, uNow, lambdaNext, theta[0], desiredState).full()).flatten()
-        # HueNow = np.zeros((self.DynSystem.dimInputs, self.DynSystem.dimParameters))
-        # HueNow[:, 0] = HueSingle
-        # Hue.append(HueNow)
-
-        # # compute the matrices, skip the initial condition and terminal state
-        # for idx in range(1, uTraj.shape[0]):
-        #     xNow = xTraj[idx, :]
-        #     uNow = uTraj[idx, :]
-        #     lambdaNext = costateTraj[idx, :]  # costate
-
-        #     dynF.append(np.array(self.dfdxFun(xNow, uNow, theta).full()))
-        #     dynG.append(np.array(self.dfduFun(xNow, uNow, theta).full()))
-        #     dynE.append(np.array(self.dfdeFun(xNow, uNow, theta).full()))
-
-        #     Hxx.append(np.array(self.ddHdxdxFun(xNow, uNow, lambdaNext, theta[idx], desiredState).full()))
-        #     Hxu.append(np.array(self.ddHdxduFun(xNow, uNow, lambdaNext, theta[idx], desiredState).full()))
-        #     Hux.append(np.array(self.ddHdudxFun(xNow, uNow, lambdaNext, theta[idx], desiredState).full()))
-        #     Huu.append(np.array(self.ddHduduFun(xNow, uNow, lambdaNext, theta[idx], desiredState).full()))
-
-        #     HxeSingle = np.array(self.ddHdxdeSingleFun(xNow, uNow, lambdaNext, theta[idx], desiredState).full()).flatten()
-        #     HueSingle = np.array(self.ddHdudeSingleFun(xNow, uNow, lambdaNext, theta[idx], desiredState).full()).flatten()
-
-        #     HxeNow = np.zeros((self.DynSystem.dimStates, self.DynSystem.dimParameters))
-        #     HueNow = np.zeros((self.DynSystem.dimInputs, self.DynSystem.dimParameters))
-
-        #     HxeNow[:, idx] = HxeSingle
-        #     HueNow[:, idx] = HueSingle
-        #     Hxe.append(HxeNow)
-        #     Hue.append(HueNow)
-
-
-
-
-
         # compute the matrices, skip the initial condition and terminal state
         for idx in range(uTraj.shape[0]):
             xNow = xTraj[idx, :]
@@ -334,31 +269,16 @@ class PDP:
             dynG.append(np.array(self.dfduFun(xNow, uNow, theta).full()))
             dynE.append(np.array(self.dfdeFun(xNow, uNow, theta).full()))
 
-            Hxx.append(np.array(self.ddHdxdxFun(xNow, uNow, lambdaNext, theta[idx], desiredState).full()))
-            Hxu.append(np.array(self.ddHdxduFun(xNow, uNow, lambdaNext, theta[idx], desiredState).full()))
-            Hux.append(np.array(self.ddHdudxFun(xNow, uNow, lambdaNext, theta[idx], desiredState).full()))
-            Huu.append(np.array(self.ddHduduFun(xNow, uNow, lambdaNext, theta[idx], desiredState).full()))
+            Hxx.append(np.array(self.ddHdxdxFun(xNow, uNow, lambdaNext, theta).full()))
+            Hxu.append(np.array(self.ddHdxduFun(xNow, uNow, lambdaNext, theta).full()))
+            Hux.append(np.array(self.ddHdudxFun(xNow, uNow, lambdaNext, theta).full()))
+            Huu.append(np.array(self.ddHduduFun(xNow, uNow, lambdaNext, theta).full()))
 
-            HxeSingle = np.array(self.ddHdxdeSingleFun(xNow, uNow, lambdaNext, theta[idx], desiredState).full()).flatten()
-            HueSingle = np.array(self.ddHdudeSingleFun(xNow, uNow, lambdaNext, theta[idx], desiredState).full()).flatten()
+            Hxe.append(np.array(self.ddHdxdeFun(xNow, uNow, lambdaNext, theta).full()))
+            Hue.append(np.array(self.ddHdudeFun(xNow, uNow, lambdaNext, theta).full()))
 
-            HxeNow = np.zeros((self.DynSystem.dimStates, self.DynSystem.dimParameters))
-            HueNow = np.zeros((self.DynSystem.dimInputs, self.DynSystem.dimParameters))
-
-            HxeNow[:, idx] = HxeSingle
-            HueNow[:, idx] = HueSingle
-            Hxe.append(HxeNow)
-            Hue.append(HueNow)
-
-
-
-
-
-        hxx.append(np.array(self.ddhdxdxFun(xTraj[-1, :], theta[idx], desiredState).full()))
-        hxeSingle = np.array(self.ddhdxdeSingleFun(xTraj[-1, :], theta[idx], desiredState).full()).flatten()
-        hxeNow = np.zeros((self.DynSystem.dimStates, self.DynSystem.dimParameters))
-        hxeNow[:, -1] = hxeSingle
-        hxe.append(hxeNow)
+        hxx.append(np.array(self.ddhdxdxFun(xTraj[-1, :], theta).full()))
+        hxe.append(np.array(self.ddhdxdeFun(xTraj[-1, :], theta).full()))
 
         lqrSystem = {"dynF": dynF,
                      "dynG": dynG,
@@ -375,7 +295,6 @@ class PDP:
 
     def solveLqr(self, lqrSystem):
         # solve the Riccati equations
-        I = np.eye(self.DynSystem.dimStates)
         PList = self.DynSystem.horizonSteps * [np.zeros((self.DynSystem.dimStates, self.DynSystem.dimStates))]
         WList = self.DynSystem.horizonSteps * [np.zeros((self.DynSystem.dimStates, self.DynSystem.dimParameters))]
 
@@ -393,7 +312,7 @@ class PDP:
             Qt = lqrSystem["Hxx"][idx] - np.matmul(HxuinvHuu, np.transpose(lqrSystem["Hxu"][idx]))
             Nt = lqrSystem["Hxe"][idx] - np.matmul(HxuinvHuu, lqrSystem["Hue"][idx])
 
-            tempMat = np.matmul(np.transpose(At), np.linalg.inv(I + np.matmul(PNext, Rt)))
+            tempMat = np.matmul(np.transpose(At), np.linalg.inv(self.matI + np.matmul(PNext, Rt)))
             PNow = Qt + np.matmul(tempMat, np.matmul(PNext, At))
             WNow = Nt + np.matmul(tempMat, WNext + np.matmul(PNext, Mt))
 
@@ -415,7 +334,7 @@ class PDP:
 
             XNow = XTrajList[idx]
             UNow = -np.matmul(invHuu, np.matmul(np.transpose(lqrSystem["Hxu"][idx]), XNow) + lqrSystem["Hue"][idx]) \
-                   - np.linalg.multi_dot([invHuu, np.transpose(lqrSystem["dynG"][idx]), np.linalg.inv(I + np.dot(PNext, Rt)),
+                   - np.linalg.multi_dot([invHuu, np.transpose(lqrSystem["dynG"][idx]), np.linalg.inv(self.matI + np.dot(PNext, Rt)),
                    (np.matmul(np.matmul(PNext, At), XNow) + np.matmul(PNext, Mt) + WNext)])
 
             xNext = np.matmul(lqrSystem["dynF"][idx], XNow) + np.matmul(lqrSystem["dynG"][idx], UNow) + lqrSystem["dynE"][idx]
@@ -432,7 +351,7 @@ class PDP:
         ax1.set_title("Loss")
         ax1.legend(["Loss"])
         ax1.set_xlabel("Iteration")
-        ax1.set_ylabel("loss")
+        ax1.set_ylabel("Loss")
 
         if blockFlag:
             plt.show()
