@@ -9,7 +9,9 @@ import numpy as np
 
 
 if __name__ == '__main__':
-    configDict = {"timeStep": 0.1, "timeHorizon": 4.0, "inputBounds": [[-1.0, 1.0], [-0.5, 0.5]]}
+    # "inputBounds" : [ [lb_input_1, lb_input_2, ...], [ub_input_1, ub_input_2, ...] ]
+    configDict = {"timeStep": 0.1, "timeHorizon": 4.0, "inputBounds": [[-2.0, -0.5], [2.0, 0.5]]}
+    # configDict = {"timeStep": 0.1, "timeHorizon": 6.0}
     MyOcSystem = OcSystem(DynSystem=Unicycle(configDict), configDict=configDict)
 
     # xAll = np.zeros(MyOcSystem.DynSystem.dimStatesAll)
@@ -18,14 +20,12 @@ if __name__ == '__main__':
     # xDecision = np.concatenate((xAll, uAll))
 
     # initial position and goal position
-    xGoal = np.array([1., 1., 0.5])
     x0 = np.array([0.1, -0.05, 0.05])
-    # set parameter theta for cost function
-    theta = np.ones(MyOcSystem.DynSystem.dimParameters)
-    theta[-1] = 10.0  # for terminal cost
+    # set parameter theta, the desired terminal position (no cost on orientation)
+    theta = np.array([-1.0, 0.5, 0.0])
 
     t0 = time.time()
-    resultDict = MyOcSystem.solve(x0, xGoal, theta)
+    resultDict = MyOcSystem.solve(x0, theta)
     t1 = time.time()
     print("Ipopt time [sec]: ", t1 - t0)
 
@@ -42,4 +42,4 @@ if __name__ == '__main__':
     # print("Time used [sec]: ", t1 - t0)
 
     # visualize the result
-    MyOcSystem.DynSystem.visualize(resultDict, x0, xGoal)
+    MyOcSystem.DynSystem.visualize(resultDict, x0, theta)

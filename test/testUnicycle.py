@@ -8,7 +8,7 @@ import numpy as np
 
 
 if __name__ == '__main__':
-    configDict = {"timeStep": 0.1, "timeHorizon": 0.3}
+    configDict = {"timeStep": 0.1, "timeHorizon": 0.5}
     MyUnicycle = Unicycle(configDict=configDict)
 
     t0 = time.time()
@@ -37,13 +37,11 @@ if __name__ == '__main__':
     xDecision = np.concatenate((xAll, uAll))
 
     # x0 = np.array([1., 2., -1.])
-    # xGoal = np.array([1., -1., 2.])
     x0 = np.random.uniform(0, 1, MyUnicycle.dimStates)
-    xGoal = np.random.uniform(0, 1, MyUnicycle.dimStates)
 
     print("Cost function for optimal control:")
     t0 = time.time()
-    print(MyUnicycle.costFun(xAll, uAll, x0, xGoal, theta))
+    print(MyUnicycle.costFun(xAll, uAll, theta))
     t1 = time.time()
     print("cost function time [sec]: ", t1 - t0)
 

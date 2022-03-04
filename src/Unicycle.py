@@ -20,7 +20,8 @@ class Unicycle:
         self.dimStates = 3
         self.dimInputs = 2
 
-        self.dimStatesAll = self.horizonSteps * self.dimStates
+        # initial condition is included
+        self.dimStatesAll = (self.horizonSteps + 1) * self.dimStates
         self.dimInputsAll = self.horizonSteps * self.dimInputs
 
         # construct the dynamical functions
@@ -40,10 +41,7 @@ class Unicycle:
         self.states = casadi.SX.sym("x", self.dimStates)
         self.inputs = casadi.SX.sym("u", self.dimInputs)
 
-        self.xInit = casadi.SX.sym("x0", self.dimStates)
-        self.xGoal = casadi.SX.sym("xGoal", self.dimStates)
-
-        self.dimParameters = self.horizonSteps + 1
+        self.dimParameters = self.dimStates
         self.theta = casadi.SX.sym("theta", self.dimParameters)
 
         # continuous-time dynamical function in casadi SX
@@ -63,79 +61,54 @@ class Unicycle:
         uAll = casadi.SX.sym("uAll", self.dimInputsAll)
         self.xDecision = casadi.vertcat(xAll, uAll)
 
-        self.costFun = casadi.Function("costFun", [xAll, uAll, self.xInit, self.xGoal, self.theta], [self._costFun(xAll, uAll, self.xInit, self.xGoal, self.theta)])
+        self.costFun = casadi.Function("costFun", [xAll, uAll, self.theta], [self._costFun(xAll, uAll, self.theta)])
 
-        self.dynConstraintsFun = casadi.Function("dynConstraints", [xAll, uAll, self.xInit], [self._dynConstraints(xAll, uAll, self.xInit)])
+        self.dynConstraintsFun = casadi.Function("dynConstraints", [xAll, uAll], [self._dynConstraints(xAll, uAll)])
 
 
-    def _costFun(self, xAll, uAll, xInit, xGoal, theta):
-        # the stage cost for the initial condition
-        u0 = uAll[0 : self.dimInputs]
-        cost = self._stageCostFun(xInit, u0, theta[0], xGoal)
-
-        # the stage cost from t=1 to t=T-1
-        for idx in range(1, self.horizonSteps):
-            xNow = xAll[self.dimStates*(idx-1) : self.dimStates*idx]
+    def _costFun(self, xAll, uAll, theta):
+        cost = 0.0
+        # the stage cost from t=0 to t=T-1
+        for idx in range(self.horizonSteps):
+            xNow = xAll[self.dimStates*idx : self.dimStates*(idx+1)]
             uNow = uAll[self.dimInputs*idx : self.dimInputs*(idx+1)]
-            cost += self._stageCostFun(xNow, uNow, theta[idx], xGoal)
+            cost += self._stageCostFun(xNow, uNow, theta)
 
         xTerminal = xAll[self.dimStatesAll-self.dimStates:]
-        cost += self._terminalCostFun(xTerminal, theta[self.horizonSteps], xGoal)
+        cost += self._terminalCostFun(xTerminal, theta)
 
         return cost
 
-    def _stageCostFun(self, xNow, uNow, theta, xGoal):
-        cost = ((xNow[0]-xGoal[0])**2 + (xNow[1]-xGoal[1])**2)
+    def _stageCostFun(self, xNow, uNow, theta):
+        cost = 10 * ((xNow[0]-theta[0])**2 + (xNow[1]-theta[1])**2)
         cost += (uNow[0] ** 2 + uNow[1] ** 2)
-        return theta * cost
+        return cost
     
-    def _terminalCostFun(self, xNow, theta, xGoal):
-        cost = ((xNow[0]-xGoal[0])**2 + (xNow[1]-xGoal[1])**2)
-        return theta * cost
+    def _terminalCostFun(self, xNow, theta):
+        cost = 100 * ((xNow[0]-theta[0])**2 + (xNow[1]-theta[1])**2)
+        return cost
 
-    def _dynConstraints(self, xAll, uAll, xInit):
-        dynCons = xAll[0:self.dimStates*1] - self.discDynFun(xInit, uAll[0:self.dimInputs*1])
-        for idx in range(1, self.horizonSteps):
-            xNext = xAll[self.dimStates*idx : self.dimStates*(idx+1)]
-            xNow = xAll[self.dimStates*(idx-1) : self.dimStates*idx]
+    def _dynConstraints(self, xAll, uAll):
+        dynCons = list()
+        for idx in range(self.horizonSteps):
+            xNow = xAll[self.dimStates*idx : self.dimStates*(idx+1)]
             uNow = uAll[self.dimInputs*idx : self.dimInputs*(idx+1)]
-
+            xNext = xAll[self.dimStates*(idx+1) : self.dimStates*(idx+2)]
             currentCons = xNext - self.discDynFun(xNow, uNow)
             dynCons = casadi.vertcat(dynCons, currentCons)
         return dynCons
 
-    # def _lossFun(self, xAll, uAll, theta, xGoal):
-        # xFinal = xAll[-self.dimStates:]
-        # loss = (xFinal[0]-xGoal[0])**2 + (xFinal[1]-xGoal[1])**2
-        # return loss
-
-    def _lossFun(self, xAll, uAll, theta, xGoal):
-
-        # def _lossSingle(xNow):
-            # loss = casadi.pi*(3*xNow[0]**2-16*xNow[0]+3*xNow[1]**2-20*xNow[1]+63)
-            # return loss
-
-        def _lossSingle(xNow):
-            loss = 0.5*casadi.pi*(6*xNow[0]**2-18*xNow[0]+6*xNow[1]**2-14*xNow[1]+29)
-            return loss
-
-        loss = 0.0
-        # the stage loss from t=1 to t=T-1
-        #for idx in range(1, self.horizonSteps):
-            #xNow = xAll[self.dimStates*(idx-1) : self.dimStates*idx]
-            #uNow = uAll[self.dimInputs*idx : self.dimInputs*(idx+1)]
-            #loss += _lossSingle(xNow) + (uNow[0] ** 2 + uNow[1] ** 2)
-
+    def _lossFun(self, xAll, uAll, theta):
         xTerminal = xAll[self.dimStatesAll-self.dimStates:]
-        loss += _lossSingle(xTerminal)
+        loss = ((xTerminal[0]-theta[0]) ** 2 + (xTerminal[1]-theta[1]) ** 2)
         return loss
 
-    def visualize(self, resultDict, initialState, desiredState, blockFlag=True):
+    def visualize(self, resultDict, initialState, theta, blockFlag=True):
         _, ax1 = plt.subplots(1, 1)
         ax1.plot(resultDict["xTraj"][:,0], resultDict["xTraj"][:,1], color="blue", linewidth=2)
         ax1.plot(resultDict["xTrajOpt"][:,0], resultDict["xTrajOpt"][:,1], color="red", linewidth=2, linestyle="dashed")
         ax1.scatter(initialState[0], initialState[1], marker="o", color="blue")
-        ax1.scatter(desiredState[0], desiredState[1], marker="*", color="red")
+        ax1.scatter(theta[0], theta[1], marker="*", color="red")
         ax1.set_title("Trajectory")
         ax1.legend(["Optimal Trajectory", "Trajectory from nlp solver", "start", "goal"])
         ax1.set_xlabel("x [m]")
@@ -154,7 +127,7 @@ class Unicycle:
 
         ax23.plot(resultDict["timeTraj"], resultDict["xTraj"][:,2], color="blue", linewidth=2)
         ax23.scatter(resultDict["timeTraj"][0], initialState[2], marker="o", color="blue")
-        ax23.scatter(resultDict["timeTraj"][-1], desiredState[2], marker="*", color="red")
+        ax23.scatter(resultDict["timeTraj"][-1], theta[2], marker="*", color="red")
         ax23.legend(["Optimal Trajectory", "start", "goal"])
         ax23.set_xlabel("time [sec]")
         ax23.set_ylabel("heading [radian]")
@@ -193,22 +166,21 @@ class Unicycle:
         # uAll: 1d numpy array, the sequence of inputs,
         # [u_0(0),u_1(0), u_0(1),u_1(1), ..., u_0(T-1),u_1(T-1)]
         uAll = np.random.uniform(0, 1, self.dimInputsAll)
-
         xAll = np.zeros(self.dimStatesAll)
 
         xNow = x0
+        xAll[0 : self.dimStates] = np.array(x0).flatten()
         for idx in range(self.horizonSteps):
-            xNext = self.discDynFun(
-                xNow, uAll[idx*self.dimInputs : (idx+1)*self.dimInputs])
-            xAll[idx*self.dimStates : (idx+1)*self.dimStates] = np.array(xNext).flatten()
+            xNext = self.discDynFun(xNow, uAll[idx*self.dimInputs : (idx+1)*self.dimInputs])
+            xAll[(idx+1)*self.dimStates : (idx+2)*self.dimStates] = np.array(xNext).flatten()
             xNow = xNext
 
         print("equality constraints: ")
         t0 = time.time()
-        eqCon = self.dynConstraintsFun(xAll, uAll, x0)
+        eqCon = self.dynConstraintsFun(xAll, uAll)
         print(eqCon)
         t1 = time.time()
         print("equality constraints time [sec]: ", t1 - t0)
 
         normCheck = np.linalg.norm(eqCon)
-        print("equality constraints norm: ", normCheck)
+        print("equality constraints norm (expected to be near zero): ", normCheck)
