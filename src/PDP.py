@@ -2,7 +2,8 @@
 import casadi
 import numpy as np
 import matplotlib.pyplot as plt
-from OcSystem import OcSystem
+import time
+import multiprocessing as mp
 
 
 class PDP:
@@ -11,16 +12,15 @@ class PDP:
     velocityNesterov: np.array  # 1d numpy array, velocity for Nesterov
     matI: np.array  # 2d numpy array, identity matrix
 
-    def __init__(self, DynSystem, configDict):
-        self.DynSystem = DynSystem
-        self.OcSystem = OcSystem(DynSystem=DynSystem, configDict=configDict)
-        self.configDict = configDict
+    def __init__(self, OcSystem):
+        self.OcSystem = OcSystem
+        self.DynSystem = OcSystem.DynSystem
+        self.configDict = OcSystem.configDict
 
         self.xXi = casadi.SX.sym("xXi", self.DynSystem.dimStatesAll)
         self.uXi = casadi.SX.sym("uXi", self.DynSystem.dimInputsAll)
         self.xi = casadi.vertcat(self.xXi, self.uXi)
         self.matI = np.eye(self.DynSystem.dimStates)  # identity matrix
-
         self.diffPMP()
 
     def diffPMP(self):
@@ -106,7 +106,7 @@ class PDP:
         else:
             raise Exception("Wrong optimization method type!")
 
-        # visualize the initial theta
+        # initialize the problem and visualize it later
         resultDict = self.OcSystem.solve(initialState, thetaInit)
         self.DynSystem.visualize(resultDict, initialState, thetaInit, blockFlag=False)
 
@@ -114,7 +114,7 @@ class PDP:
         thetaTraj = list()
         thetaNow = thetaInit
         for idx in range(int(paraDict["maxIter"])):
-
+            # update theta
             lossNow, thetaNext, _ = self.optFun(initialState, thetaNow, paraDict)
 
             #if lossNow > 1E3:
@@ -130,33 +130,17 @@ class PDP:
             print('Iter:', idx, ' loss:', lossNow)
 
         resultDict = self.OcSystem.solve(initialState, thetaNow)
-
         lossNow = self.lossFun(resultDict["xi"], thetaNow).full()[0, 0]
 
         lossTraj.append(lossNow)
         thetaTraj.append(thetaNow)
-
         print('Last one', ' loss:', lossNow)
         print("Theta: ", thetaNow)
-
-        # remove loss singularities
-        # lossTrajFiltered = list()
-        # count = 0
-        # for element in lossTraj:
-        #     if abs(element) < 1000:
-        #         lossTrajFiltered.append(element)
-        #     else:
-        #         count += 1
-        # print("The number of loss singularities removed: ", count)
 
         # visualize
         self.DynSystem.visualize(resultDict, initialState, thetaNow, blockFlag=False)
         # plot the loss
         self.plotLossTraj(lossTraj, blockFlag=False)
-
-        # plot the loss without singularites
-        # self.plotLossTraj(lossTrajFiltered)
-
         plt.show()
 
     def loadOptFunction(self, paraDict: dict):
@@ -231,6 +215,66 @@ class PDP:
             lossNow, _ = self.computeGradient(initialState, thetaNow)
         return lossNow, thetaNext, thetaNow
 
+
+
+    def test_func(self, idx):
+        xNow = self.xTraj[idx, :]
+        uNow = self.uTraj[idx, :]
+        lambdaNext = self.costateTraj[idx, :]  # costate
+
+        dynF = np.array(self.dfdxFun(xNow, uNow, self.theta).full())
+        dynG = np.array(self.dfduFun(xNow, uNow, self.theta).full())
+        dynE = np.array(self.dfdeFun(xNow, uNow, self.theta).full())
+
+        Hxx = np.array(self.ddHdxdxFun(xNow, uNow, lambdaNext, self.theta).full())
+        Hxu = np.array(self.ddHdxduFun(xNow, uNow, lambdaNext, self.theta).full())
+        Hux = np.array(self.ddHdudxFun(xNow, uNow, lambdaNext, self.theta).full())
+        Huu = np.array(self.ddHduduFun(xNow, uNow, lambdaNext, self.theta).full())
+
+        Hxe = np.array(self.ddHdxdeFun(xNow, uNow, lambdaNext, self.theta).full())
+        Hue = np.array(self.ddHdudeFun(xNow, uNow, lambdaNext, self.theta).full())
+        return dynF, dynG, dynE, Hxx, Hxu, Hux, Huu, Hxe, Hue
+
+    def getLqrSystem_test(self, resultDict: dict, theta):
+        """
+        xTraj: 2d numpy array, each row is the state at a time step
+            [[state_0(0), state_1(0), state_2(0), ...],
+            [state_0(1), state_1(1), state_2(1), ...],
+            ...
+            [state_0(T), state_1(T), state_2(T), ...]]
+
+        uTraj: 2d numpy array, each row is the input at a time step
+            [[u_0(0), u_1(0), ...],
+            [u_0(1), u_1(1), ...],
+            ...
+            [u_0(T-1), u_1(T-1), ...]]
+
+        costateTraj: 2d numpy array, each row is the costate at a time step
+        """
+        # define functions
+        self.xTraj = resultDict["xTraj"]
+        self.uTraj = resultDict["uTraj"]
+        self.costateTraj = resultDict["costateTraj"]
+        self.theta = theta
+
+        # initialize the system matrices of the auxiliary LQR control system
+        dynF, dynG, dynE = list(), list(), list()
+        Hxx, Hxu, Hxe, Hux, Huu, Hue, hxx, hxe = list(), list(), list(), list(), list(), list(), list(), list()
+        # Hxe, dimStates by dimParameters
+        # Hue, dimInputs by dimParameters
+        # hxe, dimStates by dimParameters
+
+        t0 = time.time()
+
+        processPool = mp.Pool()
+        results = processPool.map(self.test_func, np.arange(self.uTraj.shape[0]))
+
+        print("results[0]: ", results[0])
+        t1 = time.time()
+        print("This loop time used [sec]: ", t1 - t0)
+
+
+
     def getLqrSystem(self, resultDict: dict, theta):
         """
         xTraj: 2d numpy array, each row is the state at a time step
@@ -259,6 +303,7 @@ class PDP:
         # Hue, dimInputs by dimParameters
         # hxe, dimStates by dimParameters
 
+        # t0 = time.time()
         # compute the matrices, skip the initial condition and terminal state
         for idx in range(uTraj.shape[0]):
             xNow = xTraj[idx, :]
@@ -276,6 +321,8 @@ class PDP:
 
             Hxe.append(np.array(self.ddHdxdeFun(xNow, uNow, lambdaNext, theta).full()))
             Hue.append(np.array(self.ddHdudeFun(xNow, uNow, lambdaNext, theta).full()))
+        # t1 = time.time()
+        # print("This loop time used [sec]: ", t1 - t0)
 
         hxx.append(np.array(self.ddhdxdxFun(xTraj[-1, :], theta).full()))
         hxe.append(np.array(self.ddhdxdeFun(xTraj[-1, :], theta).full()))

@@ -3,8 +3,8 @@ import os
 import sys
 sys.path.append(os.getcwd() + '/src')
 from PDP import PDP
+from OcSystem import OcSystem
 from Unicycle import Unicycle
-import time
 import numpy as np
 
 
@@ -14,13 +14,14 @@ if __name__ == '__main__':
     configDict = {"timeStep": 0.1, "timeHorizon": 4.0}
 
     MyDynSystem = Unicycle(configDict)
-    MyPDP = PDP(DynSystem=MyDynSystem, configDict=configDict)
+    MyOcSystem = OcSystem(DynSystem=MyDynSystem, configDict=configDict)
+    MyPDP = PDP(OcSystem=MyOcSystem)
 
     # initial state
     x0 = np.array([0.0, 0.0, 0.0])
     theta = np.array([0.8, 0.2, 0.1])
 
-    paraDict = {"stepSize": 0.05, "maxIter": 20, "method": "Vanilla"}
+    paraDict = {"stepSize": 0.05, "maxIter": 10, "method": "Vanilla"}
     # paraDict = {"stepSize": 0.10, "maxIter": 500, "method": "Nesterov", "mu": 0.9, "realLossFlag": False}
 
     MyPDP.solve(x0, theta, paraDict=paraDict)

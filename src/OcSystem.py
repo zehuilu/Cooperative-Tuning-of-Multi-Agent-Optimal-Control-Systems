@@ -2,7 +2,6 @@
 import casadi
 import cyipopt
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 class OcSystem:
