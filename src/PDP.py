@@ -3,7 +3,7 @@ import casadi
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-import multiprocessing as mp
+import threading, queue
 
 
 class PDP:
@@ -134,7 +134,7 @@ class PDP:
 
         lossTraj.append(lossNow)
         thetaTraj.append(thetaNow)
-        print('Last one', ' loss:', lossNow)
+        print('Iter:', int(paraDict["maxIter"]), ' loss:', lossNow)
         print("Theta: ", thetaNow)
 
         # visualize
@@ -175,7 +175,6 @@ class PDP:
         resultDict = self.OcSystem.solve(initialState, thetaNow)
         lqrSystem = self.getLqrSystem(resultDict, thetaNow)
         resultLqr = self.solveLqr(lqrSystem)
-
         lossNow = self.lossFun(resultDict["xi"], thetaNow).full()[0, 0]
 
         dLdXi = self.dLdXiFun(resultDict["xi"], thetaNow)
@@ -214,66 +213,6 @@ class PDP:
             # compute the loss and gradient
             lossNow, _ = self.computeGradient(initialState, thetaNow)
         return lossNow, thetaNext, thetaNow
-
-
-
-    def test_func(self, idx):
-        xNow = self.xTraj[idx, :]
-        uNow = self.uTraj[idx, :]
-        lambdaNext = self.costateTraj[idx, :]  # costate
-
-        dynF = np.array(self.dfdxFun(xNow, uNow, self.theta).full())
-        dynG = np.array(self.dfduFun(xNow, uNow, self.theta).full())
-        dynE = np.array(self.dfdeFun(xNow, uNow, self.theta).full())
-
-        Hxx = np.array(self.ddHdxdxFun(xNow, uNow, lambdaNext, self.theta).full())
-        Hxu = np.array(self.ddHdxduFun(xNow, uNow, lambdaNext, self.theta).full())
-        Hux = np.array(self.ddHdudxFun(xNow, uNow, lambdaNext, self.theta).full())
-        Huu = np.array(self.ddHduduFun(xNow, uNow, lambdaNext, self.theta).full())
-
-        Hxe = np.array(self.ddHdxdeFun(xNow, uNow, lambdaNext, self.theta).full())
-        Hue = np.array(self.ddHdudeFun(xNow, uNow, lambdaNext, self.theta).full())
-        return dynF, dynG, dynE, Hxx, Hxu, Hux, Huu, Hxe, Hue
-
-    def getLqrSystem_test(self, resultDict: dict, theta):
-        """
-        xTraj: 2d numpy array, each row is the state at a time step
-            [[state_0(0), state_1(0), state_2(0), ...],
-            [state_0(1), state_1(1), state_2(1), ...],
-            ...
-            [state_0(T), state_1(T), state_2(T), ...]]
-
-        uTraj: 2d numpy array, each row is the input at a time step
-            [[u_0(0), u_1(0), ...],
-            [u_0(1), u_1(1), ...],
-            ...
-            [u_0(T-1), u_1(T-1), ...]]
-
-        costateTraj: 2d numpy array, each row is the costate at a time step
-        """
-        # define functions
-        self.xTraj = resultDict["xTraj"]
-        self.uTraj = resultDict["uTraj"]
-        self.costateTraj = resultDict["costateTraj"]
-        self.theta = theta
-
-        # initialize the system matrices of the auxiliary LQR control system
-        dynF, dynG, dynE = list(), list(), list()
-        Hxx, Hxu, Hxe, Hux, Huu, Hue, hxx, hxe = list(), list(), list(), list(), list(), list(), list(), list()
-        # Hxe, dimStates by dimParameters
-        # Hue, dimInputs by dimParameters
-        # hxe, dimStates by dimParameters
-
-        t0 = time.time()
-
-        processPool = mp.Pool()
-        results = processPool.map(self.test_func, np.arange(self.uTraj.shape[0]))
-
-        print("results[0]: ", results[0])
-        t1 = time.time()
-        print("This loop time used [sec]: ", t1 - t0)
-
-
 
     def getLqrSystem(self, resultDict: dict, theta):
         """
