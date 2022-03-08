@@ -2,13 +2,16 @@
 import os
 import sys
 sys.path.append(os.getcwd() + '/src')
-from Unicycle import Unicycle
 import time
 import numpy as np
+from Unicycle import Unicycle
+from OcSystem import OcSystem
 
 
 if __name__ == '__main__':
-    configDict = {"timeStep": 0.1, "timeHorizon": 0.5}
+    # configDict = {"timeStep": 0.1, "timeHorizon": 0.5}
+    configDict = {"timeStep": 0.1, "timeHorizon": 10.0, "inputBounds": [[0.0, -2E19], [2E19, 2E19]]}
+
     MyUnicycle = Unicycle(configDict=configDict)
 
     t0 = time.time()
@@ -20,15 +23,6 @@ if __name__ == '__main__':
     print(MyUnicycle.discDynFun( [0., 0., 0.], [0., 0.] ))
     t2 = time.time()
     print("discrete dyn time used [sec]: ", t2 - t1)
-
-    # xAll = np.zeros(MyUnicycle.dimStatesAll)
-    # uAll = np.zeros(MyUnicycle.dimInputsAll)
-    # uAll[-1] = 5
-    # uAll[0] = 3
-
-    # xAll = np.arange(0.0, MyUnicycle.dimStatesAll, dtype=np.float32)
-    # uAll = np.arange(0.0, MyUnicycle.dimInputsAll, dtype=np.float32)
-    # theta = np.ones(MyUnicycle.dimParameters)
 
     xAll = np.random.uniform(0, 1, MyUnicycle.dimStatesAll)
     uAll = np.random.uniform(0, 1, MyUnicycle.dimInputsAll)
@@ -46,3 +40,14 @@ if __name__ == '__main__':
     print("cost function time [sec]: ", t1 - t0)
 
     MyUnicycle.testDynamicsConstraints(x0)
+
+    # initial state
+    x0 = MyUnicycle.generateRandomInitialState(radius=2, center=[0.0, 0.0])
+    theta = np.array([0.0, 0.0, 0.0])
+
+    # solve
+    MyOcSystem = OcSystem(DynSystem=MyUnicycle, configDict=configDict)
+    resultDict = MyOcSystem.solve(x0, theta)
+
+    # visualize
+    MyUnicycle.visualize(resultDict, x0, theta)

@@ -2,6 +2,8 @@
 import casadi
 import numpy as np
 import time
+import math
+import random
 import matplotlib.pyplot as plt
 
 
@@ -109,16 +111,38 @@ class Unicycle:
         loss = 100 * ((xTerminal[0]-theta[0]) ** 2 + (xTerminal[1]-theta[1]) ** 2)
         return loss
 
-    def visualize(self, resultDict, initialState, theta, blockFlag=True):
+    def plotArrow(self, stateNow):
+        magnitude = 0.1
+        dx = magnitude * math.cos(stateNow[2])
+        dy = magnitude * math.sin(stateNow[2])
+        width = 0.03
+        plt.arrow(stateNow[0], stateNow[1], dx, dy, width=width, alpha=0.5, color="green")
+
+    def visualize(self, resultDict, initialState, theta, blockFlag=True, legendFlag=True):
         _, ax1 = plt.subplots(1, 1)
         ax1.plot(resultDict["xTraj"][:,0], resultDict["xTraj"][:,1], color="blue", linewidth=2)
         ax1.plot(resultDict["xTrajOpt"][:,0], resultDict["xTrajOpt"][:,1], color="red", linewidth=2, linestyle="dashed")
         ax1.scatter(initialState[0], initialState[1], marker="o", color="blue")
         ax1.scatter(theta[0], theta[1], marker="*", color="red")
+
+        # plot arrows for heading angles
+        self.plotArrow(initialState)
+        self.plotArrow(resultDict["xTraj"][-1, :])
+
         ax1.set_title("Trajectory")
-        ax1.legend(["Optimal Trajectory", "Trajectory from nlp solver", "start", "goal"])
         ax1.set_xlabel("x [m]")
         ax1.set_ylabel("y [m]")
+
+        # plot legends
+        if legendFlag:
+            labels = ["Start", "Goal"]
+            marker = ["o", "*"]
+            colors = ["blue", "red"]
+            f = lambda m,c: plt.plot([], [], marker=m, color=c, ls="none")[0]
+            handles = [f(marker[i], colors[i]) for i in range(len(labels))]
+            handles.append(plt.plot([],[], linestyle=None, color="blue", linewidth=2)[0])
+            labels.append("Trajectory")
+            plt.legend(handles, labels, bbox_to_anchor=(1, 1), loc="upper left", framealpha=1)
 
         _, (ax21, ax22, ax23) = plt.subplots(3, 1)
         ax21.plot(resultDict["timeTraj"][:-1], resultDict["uTraj"][:,0], color="blue", linewidth=2)
@@ -138,10 +162,7 @@ class Unicycle:
         ax23.set_xlabel("time [sec]")
         ax23.set_ylabel("heading [radian]")
 
-        if blockFlag:
-            plt.show()
-        else:
-            plt.show(block=False)
+        plt.show(block=blockFlag)
 
     def testDynamicsConstraints(self, x0):
         """
@@ -190,3 +211,27 @@ class Unicycle:
 
         normCheck = np.linalg.norm(eqCon)
         print("equality constraints norm (expected to be near zero): ", normCheck)
+
+    def generateRandomInitialState(self, radius: float, center=[0.0, 0.0]):
+        """
+        Randomly generate initial state a unicycle, where the position is randomly distributed on a circle with given radius and center.
+
+        Inputs:
+            radius: the radius of the circle
+            center; 1d lsit, the position of center of the circle, [px0, py0]
+        
+        Outputs:
+            initialState: 1d numpy array for the initial state
+        """
+        angle = random.uniform(-3.14, 3.14)
+        px = center[0] + radius * round(math.cos(angle), 2)
+        py = center[1] + radius * round(math.sin(angle), 2)
+
+        if abs(px - center[0]) >= 1E-2:
+            heading = round(math.atan( (py - center[1]) / (px - center[0]) ), 2)
+        else:
+            if py - center[1] > 0:
+                heading = 1.57
+            else:
+                heading = -1.57
+        return np.array([px, py, heading])

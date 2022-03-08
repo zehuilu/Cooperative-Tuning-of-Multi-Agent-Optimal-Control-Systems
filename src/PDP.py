@@ -339,7 +339,4 @@ class PDP:
         ax1.set_xlabel("Iteration")
         ax1.set_ylabel("Loss")
 
-        if blockFlag:
-            plt.show()
-        else:
-            plt.show(block=False)
+        plt.show(block=blockFlag)

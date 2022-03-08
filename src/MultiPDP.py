@@ -179,10 +179,7 @@ class MultiPDP:
         ax2.set_xlabel("Iteration")
         ax2.set_ylabel("Error")
 
-        if blockFlag:
-            plt.show()
-        else:
-            plt.show(block=False)
+        plt.show(block=blockFlag)
 
     def plotArrow(self, stateNow):
         magnitude = 0.1
@@ -238,7 +235,4 @@ class MultiPDP:
             ax23.set_xlabel("time [sec]")
             ax23.set_ylabel("heading [radian]")
 
-        if blockFlag:
-            plt.show()
-        else:
-            plt.show(block=False)
+        plt.show(block=blockFlag)
