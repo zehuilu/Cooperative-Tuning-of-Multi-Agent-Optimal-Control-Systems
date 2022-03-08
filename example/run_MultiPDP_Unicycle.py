@@ -9,23 +9,23 @@ import numpy as np
 
 
 if __name__ == '__main__':
-    configDict = {"timeStep": 0.02, "timeHorizon": 4.0}
+    configDict = {"timeStep": 0.10, "timeHorizon": 4.0}
 
     # define a graph with 5 agents by an adjacency matrix
     # row i is the adjacency for agent i
 
-    # adjacencyMat = np.array([
-    #     [1, 1, 0, 0, 1],
-    #     [1, 1, 1, 0, 1],
-    #     [0, 1, 1, 1, 0],
-    #     [0, 0, 1, 1, 1],
-    #     [1, 1, 0, 1, 1]])
-
     adjacencyMat = np.array([
-        [1, 1, 0, 0],
-        [1, 1, 1, 1],
-        [0, 1, 1, 1],
-        [0, 1, 1, 1]])
+        [1, 1, 0, 0, 1],
+        [1, 1, 1, 0, 1],
+        [0, 1, 1, 1, 0],
+        [0, 0, 1, 1, 1],
+        [1, 1, 0, 1, 1]])
+
+    # adjacencyMat = np.array([
+    #     [1, 1, 0, 0],
+    #     [1, 1, 1, 1],
+    #     [0, 1, 1, 1],
+    #     [0, 1, 1, 1]])
 
     # initialize a list of agents which are optimal control systems
     listOcSystem = list()
@@ -37,16 +37,16 @@ if __name__ == '__main__':
 
     # initial state and theta
     initialStateAll = MyMultiPDP.generateRandomInitialState(
-        radius=20, numAgent=adjacencyMat.shape[0], center=[0, 0], headingRange=[-1.57, 1.57])
+        radius=20, numAgent=adjacencyMat.shape[0], center=[0, 0], headingRange=[0.0])
     initialThetaAll = MyMultiPDP.generateRandomInitialState(
-        radius=5, numAgent=adjacencyMat.shape[0], center=[0, 0], headingRange=[-0.5, 0.5])
+        radius=5, numAgent=adjacencyMat.shape[0], center=[0, 0], headingRange=[0.0])
 
     print("initialStateAll:")
     print(initialStateAll)
     print("initialThetaAll:")
     print(initialThetaAll)
 
-    paraDict = {"stepSize": 0.2, "maxIter": 100}
+    paraDict = {"stepSize": 0.1, "maxIter": 100}
 
     # run the algorithm
     MyMultiPDP.solve(initialStateAll, initialThetaAll, paraDict=paraDict)

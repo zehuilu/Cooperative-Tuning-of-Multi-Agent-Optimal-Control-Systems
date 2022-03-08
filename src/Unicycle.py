@@ -86,8 +86,8 @@ class Unicycle:
     
     def _terminalCostFun(self, xNow, theta):
         # headingError = 1 - casadi.cos(xNow[2]) * casadi.cos(theta[2]) - casadi.sin(xNow[2]) * casadi.sin(theta[2])
-        # cost = 5 * ((xNow[0]-theta[0])**2 + (xNow[1]-theta[1])**2) + 10 * headingError
         cost = 5 * ((xNow[0]-theta[0])**2 + (xNow[1]-theta[1])**2)
+        # cost += 5 * headingError
         return cost
 
     def _dynConstraints(self, xAll, uAll):
@@ -106,7 +106,7 @@ class Unicycle:
         # headingError = 1 - casadi.cos(xTerminal[2]) * casadi.cos(theta[2]) - casadi.sin(xTerminal[2]) * casadi.sin(theta[2])
         # loss = 1 * ((xTerminal[0]-theta[0]) ** 2 + (xTerminal[1]-theta[1]) ** 2 + 10 * headingError)
 
-        loss = 10 * ((xTerminal[0]-theta[0]) ** 2 + (xTerminal[1]-theta[1]) ** 2)
+        loss = 100 * ((xTerminal[0]-theta[0]) ** 2 + (xTerminal[1]-theta[1]) ** 2)
         return loss
 
     def visualize(self, resultDict, initialState, theta, blockFlag=True):

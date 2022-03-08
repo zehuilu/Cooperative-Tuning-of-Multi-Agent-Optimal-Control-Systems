@@ -11,7 +11,7 @@ import numpy as np
 if __name__ == '__main__':
     # "inputBounds" : [ [lb_input_1, lb_input_2, ...], [ub_input_1, ub_input_2, ...] ]
 
-    # configDict = {"timeStep": 0.1, "timeHorizon": 4.0, "inputBounds": [[-2.0, -0.5], [2.0, 0.5]]}
+    # configDict = {"timeStep": 0.1, "timeHorizon": 4.0, "inputBounds": [[-5.0, -0.5], [5.0, 0.5]]}
     configDict = {"timeStep": 0.1, "timeHorizon": 4.0}
 
     MyDynSystem = Unicycle(configDict)

@@ -90,7 +90,7 @@ class MultiPDP:
         lossTraj = list()
         thetaAllTraj  = list()
         thetaErrorTraj = list()
-        idxIterMargin = 20
+        idxIterMargin = 40
         for idxIter in range(int(paraDict["maxIter"])):
             # error among theta
             thetaErrorTraj.append(self.computeThetaError(thetaNowAll))
