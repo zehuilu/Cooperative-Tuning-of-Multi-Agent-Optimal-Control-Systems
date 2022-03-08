@@ -9,8 +9,10 @@ from OcSystem import OcSystem
 
 
 if __name__ == '__main__':
+    # "inputBounds" : [ [lb_input_1, lb_input_2, ...], [ub_input_1, ub_input_2, ...] ]
+
     # configDict = {"timeStep": 0.1, "timeHorizon": 0.5}
-    configDict = {"timeStep": 0.1, "timeHorizon": 10.0, "inputBounds": [[0.0, -2E19], [2E19, 2E19]]}
+    configDict = {"timeStep": 0.1, "timeHorizon": 6.0, "inputBounds": [[0.0, -2E19], [2E19, 2E19]]}
 
     MyUnicycle = Unicycle(configDict=configDict)
 
@@ -42,8 +44,8 @@ if __name__ == '__main__':
     MyUnicycle.testDynamicsConstraints(x0)
 
     # initial state
-    x0 = MyUnicycle.generateRandomInitialState(radius=2, center=[0.0, 0.0])
-    theta = np.array([0.0, 0.0, 0.0])
+    theta = np.array([0.2, -0.3, 0.0])
+    x0 = MyUnicycle.generateRandomInitialState(theta, radius=2, center=[0.0, 0.0])
 
     # solve
     MyOcSystem = OcSystem(DynSystem=MyUnicycle, configDict=configDict)

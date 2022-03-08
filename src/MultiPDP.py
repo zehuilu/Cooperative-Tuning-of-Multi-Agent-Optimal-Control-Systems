@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import random
 import math
 import numpy as np
 import matplotlib.pyplot as plt
@@ -46,29 +45,45 @@ class MultiPDP:
         for idx in range(self.numAgent):
             self.weightMat[idx][idx] = weightMatSelf[idx]
 
-    def generateRandomInitialState(self, radius: float, numAgent: int, center=[0.0, 0.0], headingRange=[-3.14, 3.14]):
+    def generateRandomInitialTheta(self, radius: float, center=[0.0, 0.0], headingRange=[-3.14, 3.14]):
         """
-        Randomly generate initial state for multiple agents, where the position is randomly distributed on a circle with given radius and center.
+        Randomly generate initial theta for multiple agents, where the position is randomly distributed on a circle with given radius and center.
 
         Inputs:
             radius: the radius of the circle
-            numAgent: number of agents
             center; 1d lsit, the position of center of the circle, [px0, py0]
             headingRange: 1d list, the random range of heading angle, [lower bound, upper bound]; to be a deterministic value when the list size is just 1
         
         Outputs:
-            initialStateAll: 2d numpy array, i-th row is the initial state for agent-i
+            initialThetaAll: 2d numpy array, i-th row is the initial theta for agent-i
         """
-        initialStateAll = np.zeros((numAgent, self.listOcSystem[0].DynSystem.dimStates))
-        for idx in range(numAgent):
-            angle = random.uniform(-3.14, 3.14)
+        initialThetaAll = np.zeros((self.numAgent, self.listOcSystem[0].DynSystem.dimParameters))
+        for idx in range(self.numAgent):
+            angle = np.random.uniform(-3.14, 3.14)
             px = center[0] + radius * round(math.cos(angle), 2)
             py = center[1] + radius * round(math.sin(angle), 2)
             if len(headingRange) > 1:
-                heading = round(random.uniform(headingRange[0], headingRange[1]), 2)
+                heading = round(np.random.uniform(headingRange[0], headingRange[1]), 2)
             else:
                 heading = headingRange[0]
-            initialStateAll[idx, :] = np.array([px, py, heading])
+            initialThetaAll[idx, :] = np.array([px, py, heading])
+        return initialThetaAll
+
+    def generateRandomInitialState(self, initialThetaAll: np.array, radius: float):
+        """
+        Randomly generate initial state for multiple agents, see more details in each dynamical system object.
+
+        Inputs:
+            initialThetaAll: 2d numpy array, i-th row is the initial theta for agent-i
+            radius: float, each initial position is generated along a circle, where the center is the associated theta position and the argument radius
+
+        Outputs:
+            initialStateAll: 2d numpy array, i-th row is the initial state for agent-i
+        """
+        initialStateAll = np.zeros((self.numAgent, self.listOcSystem[0].DynSystem.dimStates))
+        for idx in range(self.numAgent):
+            x0 = self.listOcSystem[0].DynSystem.generateRandomInitialState(initialThetaAll[idx, :], radius, center=initialStateAll[idx, 0:2])
+            initialStateAll[idx, :] = x0
         return initialStateAll
 
     def solve(self, initialStateAll, initialThetaAll, paraDict: dict):
@@ -121,10 +136,6 @@ class MultiPDP:
         for idx in range(self.numAgent):
             resultDictList.append(self.listOcSystem[idx].solve(initialStateAll[idx], thetaNowAll[idx]))
             lossVec[idx] = self.listPDP[idx].lossFun(resultDictList[idx]["xi"], thetaNowAll[idx]).full()[0, 0]
-
-        # lossTraj.append(lossVec.sum())
-        # thetaAllTraj.append(thetaNowAll)
-        # thetaErrorTraj.append(self.computeThetaError(thetaNowAll))
 
         print('Iter:', idxIter + 1, ' loss:', lossVec.sum())
 
@@ -186,7 +197,8 @@ class MultiPDP:
         dx = magnitude * math.cos(stateNow[2])
         dy = magnitude * math.sin(stateNow[2])
         width = 0.03
-        plt.arrow(stateNow[0], stateNow[1], dx, dy, width=width, head_width=7*width, head_length=3*width, alpha=0.5, color="green")
+        # plt.arrow(stateNow[0], stateNow[1], dx, dy, alpha=0.5, color="green", width=width, head_width=7*width, head_length=3*width)
+        plt.arrow(stateNow[0], stateNow[1], dx, dy, alpha=0.5, color="green")
 
     def visualize(self, resultDictList, initialStateAll, thetaAll, blockFlag=True, legendFlag=True):
         _, ax1 = plt.subplots(1, 1)
@@ -197,9 +209,9 @@ class MultiPDP:
             ax1.scatter(thetaAll[idx, 0], thetaAll[idx, 1], marker="*", color="red")
 
         # plot arrows for heading angles
-        # for idx in range(self.numAgent):
-        #     self.plotArrow(initialStateAll[idx, :])
-        #     self.plotArrow(resultDictList[idx]["xTraj"][-1, :])
+        for idx in range(self.numAgent):
+            self.plotArrow(initialStateAll[idx, :])
+            self.plotArrow(resultDictList[idx]["xTraj"][-1, :])
 
         # ax1.set_title("Trajectory")
         ax1.set_xlabel("x [m]")

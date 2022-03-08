@@ -9,7 +9,10 @@ import numpy as np
 
 
 if __name__ == '__main__':
-    configDict = {"timeStep": 0.10, "timeHorizon": 4.0}
+    # "inputBounds" : [ [lb_input_1, lb_input_2, ...], [ub_input_1, ub_input_2, ...] ]
+
+    configDict = {"timeStep": 0.10, "timeHorizon": 6.0, "inputBounds": [[0.0, -2E19], [2E19, 2E19]]}
+    # configDict = {"timeStep": 0.10, "timeHorizon": 6.0}
 
     # define a graph with 5 agents by an adjacency matrix
     # row i is the adjacency for agent i
@@ -36,10 +39,8 @@ if __name__ == '__main__':
     MyMultiPDP = MultiPDP(listOcSystem, adjacencyMat)
 
     # initial state and theta
-    initialStateAll = MyMultiPDP.generateRandomInitialState(
-        radius=20, numAgent=adjacencyMat.shape[0], center=[0, 0], headingRange=[0.0])
-    initialThetaAll = MyMultiPDP.generateRandomInitialState(
-        radius=5, numAgent=adjacencyMat.shape[0], center=[0, 0], headingRange=[0.0])
+    initialThetaAll = MyMultiPDP.generateRandomInitialTheta(radius=3, center=[0, 0], headingRange=[0.0])
+    initialStateAll = MyMultiPDP.generateRandomInitialState(initialThetaAll, radius=10)
 
     print("initialStateAll:")
     print(initialStateAll)

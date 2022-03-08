@@ -3,7 +3,6 @@ import casadi
 import numpy as np
 import time
 import math
-import random
 import matplotlib.pyplot as plt
 
 
@@ -115,8 +114,8 @@ class Unicycle:
         magnitude = 0.1
         dx = magnitude * math.cos(stateNow[2])
         dy = magnitude * math.sin(stateNow[2])
-        width = 0.03
-        plt.arrow(stateNow[0], stateNow[1], dx, dy, width=width, alpha=0.5, color="green")
+        width = 0.005
+        plt.arrow(stateNow[0], stateNow[1], dx, dy, alpha=0.5, color="green", width=width)
 
     def visualize(self, resultDict, initialState, theta, blockFlag=True, legendFlag=True):
         _, ax1 = plt.subplots(1, 1)
@@ -212,26 +211,50 @@ class Unicycle:
         normCheck = np.linalg.norm(eqCon)
         print("equality constraints norm (expected to be near zero): ", normCheck)
 
-    def generateRandomInitialState(self, radius: float, center=[0.0, 0.0]):
+    def generateRandomInitialState(self, theta, radius: float, center=[0.0, 0.0]):
         """
-        Randomly generate initial state a unicycle, where the position is randomly distributed on a circle with given radius and center.
+        Randomly generate initial state for a unicycle, where the position is randomly generated on a circle with given radius and center,
+        and heading points at the desired position theta + variance.
 
         Inputs:
+            theta: the desired terminal state, [px, py, heading]
             radius: the radius of the circle
-            center; 1d lsit, the position of center of the circle, [px0, py0]
+            center: 1d lsit, the position of center of the circle, [px0, py0]
         
         Outputs:
             initialState: 1d numpy array for the initial state
         """
-        angle = random.uniform(-3.14, 3.14)
-        px = center[0] + radius * round(math.cos(angle), 2)
-        py = center[1] + radius * round(math.sin(angle), 2)
+        a = np.random.uniform(-3.14, 3.14)
+        px = center[0] + radius * round(math.cos(a), 2)
+        py = center[1] + radius * round(math.sin(a), 2)
 
-        if abs(px - center[0]) >= 1E-2:
-            heading = round(math.atan( (py - center[1]) / (px - center[0]) ), 2)
-        else:
-            if py - center[1] > 0:
-                heading = 1.57
+        dx = px - theta[0]
+        dy = py - theta[0]
+        epsilon = 0.1
+        if abs(dy) < epsilon:
+            if dx < epsilon:
+                heading = 0.0
             else:
+                heading = 3.14
+        elif abs(dx) < epsilon:
+            if dy > 0:
                 heading = -1.57
+            else:
+                heading = 1.57
+        else:
+            t = round(math.atan(dy/dx), 2)
+            if dx < 0:
+                if dy < 0:
+                    headingMid = t
+                else:
+                    headingMid = t
+            else:
+                if dy < 0:
+                    headingMid = 3.14 + t
+                else:
+                    headingMid = t - 3.14
+            # generate random number from a range [left, right], where there is high probability for two ends
+            left = headingMid-0.2*abs(headingMid)
+            right = headingMid+0.2*abs(headingMid)
+            heading = left + (right - left) * np.random.beta(0.5, 0.5)
         return np.array([px, py, heading])
