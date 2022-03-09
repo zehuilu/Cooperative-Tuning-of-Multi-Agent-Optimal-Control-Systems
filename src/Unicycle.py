@@ -254,7 +254,9 @@ class Unicycle:
                 else:
                     headingMid = t - 3.14
             # generate random number from a range [left, right], where there is high probability for two ends
-            left = headingMid-0.2*abs(headingMid)
-            right = headingMid+0.2*abs(headingMid)
-            heading = left + (right - left) * np.random.beta(0.5, 0.5)
+            # left = headingMid-0.3*abs(headingMid)
+            # right = headingMid+0.3*abs(headingMid)
+            left = headingMid - 3.14/3
+            right = headingMid + 3.14/3
+            heading = round(left + (right - left) * np.random.beta(0.1, 0.1), 2)
         return np.array([px, py, heading])

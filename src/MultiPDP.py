@@ -2,7 +2,18 @@
 import math
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 from PDP import PDP
+
+
+DYNAMIC_GRAPH_FLAG=True
+if DYNAMIC_GRAPH_FLAG:
+    adjacencyMat2 = np.array([
+        [1, 1, 0, 1, 0],
+        [1, 1, 1, 0, 0],
+        [0, 1, 1, 1, 1],
+        [1, 0, 1, 1, 1],
+        [0, 0, 1, 1, 1]])
 
 
 class MultiPDP:
@@ -105,8 +116,14 @@ class MultiPDP:
         lossTraj = list()
         thetaAllTraj  = list()
         thetaErrorTraj = list()
-        idxIterMargin = 40
+        idxIterMargin = 20
         for idxIter in range(int(paraDict["maxIter"])):
+            # for dynamic graph
+            if DYNAMIC_GRAPH_FLAG:
+                if abs(idxIter - 6) < 1E-2:
+                    self.adjacencyMat = adjacencyMat2
+                    self.generateMetropolisWeight()
+
             # error among theta
             thetaErrorTraj.append(self.computeThetaError(thetaNowAll))
             # compute the gradients
@@ -183,12 +200,14 @@ class MultiPDP:
         # ax1.legend(["Loss"])
         # ax1.set_xlabel("Iteration")
         ax1.set_ylabel("Loss (Relative)")
+        ax1.xaxis.set_major_locator(MaxNLocator(integer=True))
 
         ax2.plot(np.arange(len(thetaErrorTraj), dtype=int), thetaErrorTraj, color="blue", linewidth=2)
         # ax2.set_title("Theta error")
         # ax2.legend(["error"])
         ax2.set_xlabel("Iteration")
         ax2.set_ylabel("Error")
+        ax2.xaxis.set_major_locator(MaxNLocator(integer=True))
 
         plt.show(block=blockFlag)
 
