@@ -17,26 +17,47 @@ if __name__ == '__main__':
     # define a graph with 5 agents by an adjacency matrix
     # row i is the adjacency for agent i
 
-    adjacencyMat = np.array([
-        [1, 1, 0, 0, 1],
+    # for periodic graph
+    adjacencyMat1 = np.array([
+        [1, 1, 0, 0, 0],
+        [0, 1, 0, 0, 0],
+        [1, 0, 1, 0, 0],
+        [0, 0, 1, 1, 0],
+        [0, 0, 0, 0, 1]])
+    adjacencyMat2 = np.array([
+        [1, 1, 0, 0, 0],
         [1, 1, 1, 0, 1],
-        [0, 1, 1, 1, 0],
-        [0, 0, 1, 1, 1],
-        [1, 1, 0, 1, 1]])
+        [0, 0, 1, 0, 0],
+        [0, 1, 0, 1, 0],
+        [0, 0, 0, 1, 1]])
+    adjacencyMat3 = np.array([
+        [1, 0, 0, 0, 0],
+        [0, 1, 1, 0, 1],
+        [0, 1, 1, 0, 0],
+        [0, 0, 0, 1, 1],
+        [0, 1, 0, 0, 1]])
+    adjacencyMatList = [adjacencyMat1, adjacencyMat2, adjacencyMat3]
+    # initialize a list of agents which are optimal control systems
+    listOcSystem = list()
+    for idx in range(adjacencyMatList[0].shape[0]):
+        listOcSystem.append(OcSystem(DynSystem=Unicycle(configDict), configDict=configDict))
+    # initialize multiple agents in a Cooperative Tuning Framework
+    MyMultiPDP = MultiPDP(listOcSystem, adjacencyMatList, graphPeriodicFlag=True)
 
+
+    # # for static graph
     # adjacencyMat = np.array([
     #     [1, 1, 0, 0],
     #     [1, 1, 1, 1],
     #     [0, 1, 1, 1],
     #     [0, 1, 1, 1]])
+    # # initialize a list of agents which are optimal control systems
+    # listOcSystem = list()
+    # for idx in range(adjacencyMat.shape[0]):
+    #     listOcSystem.append(OcSystem(DynSystem=Unicycle(configDict), configDict=configDict))
+    # # initialize multiple agents in a Cooperative Tuning Framework
+    # MyMultiPDP = MultiPDP(listOcSystem, adjacencyMat)
 
-    # initialize a list of agents which are optimal control systems
-    listOcSystem = list()
-    for idx in range(adjacencyMat.shape[0]):
-        listOcSystem.append(OcSystem(DynSystem=Unicycle(configDict), configDict=configDict))
-
-    # initialize multiple agents in a Cooperative Tuning Framework
-    MyMultiPDP = MultiPDP(listOcSystem, adjacencyMat)
 
     # initial state and theta
     initialThetaAll = MyMultiPDP.generateRandomInitialTheta(radius=3, center=[0, 0], headingRange=[0.0])

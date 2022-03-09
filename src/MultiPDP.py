@@ -6,31 +6,25 @@ from matplotlib.ticker import MaxNLocator
 from PDP import PDP
 
 
-DYNAMIC_GRAPH_FLAG=True
-if DYNAMIC_GRAPH_FLAG:
-    adjacencyMat2 = np.array([
-        [1, 1, 0, 1, 0],
-        [1, 1, 1, 0, 0],
-        [0, 1, 1, 1, 1],
-        [1, 0, 1, 1, 1],
-        [0, 0, 1, 1, 1]])
-
-
 class MultiPDP:
     numAgent: int  # number of agents
     optMethodStr: str  # a string for optimization method
 
-    def __init__(self, listOcSystem: list, adjacencyMat: np.array):
+    def __init__(self, listOcSystem: list, adjacencyMat, graphPeriodicFlag=False):
         self.listOcSystem = listOcSystem
         self.numAgent = len(listOcSystem)
         self.configDict = listOcSystem[0].configDict
-        self.adjacencyMat = adjacencyMat
-        self.generateMetropolisWeight()
+        self.graphPeriodicFlag = graphPeriodicFlag
+        if not graphPeriodicFlag:
+            self.adjacencyMat = adjacencyMat
+            self.generateMetropolisWeight(adjacencyMat)
+        else:
+            self.adjacencyMatList = adjacencyMat
         self.listPDP = list()
         for idx in range(self.numAgent):
             self.listPDP.append(PDP(OcSystem=self.listOcSystem[idx]))
 
-    def generateMetropolisWeight(self):
+    def generateMetropolisWeight(self, adjacencyMat):
         """
         Generate a Metropolis Weight matrix, whose entry in i-th row and j-th column is the weight for receiver i and sender j
         """
@@ -38,16 +32,16 @@ class MultiPDP:
         self.weightMat = np.zeros((self.numAgent, self.numAgent))
         # each row with index i is a vector of weights given this receiver i
 
-        # for self.adjacencyMat, row i is the adjacency for agent i
+        # for adjacencyMat, row i is the adjacency for agent i
         # i-th element in dArray is d_i, namely the number of neighbors (incuding itself)
-        dArray = np.sum(self.adjacencyMat, axis=1)
+        dArray = np.sum(adjacencyMat, axis=1)
 
         for row in range(self.numAgent):
             for col in range(self.numAgent):
                 # not compute self.weightMat[row][col] yet
                 if row != col:
                     # if col (j) is a neighbor of row (i), do calculation; otherwise 0
-                    if self.adjacencyMat[row][col] > 0.5:
+                    if adjacencyMat[row][col] > 0.5:
                         self.weightMat[row][col] = 1 / (max(dArray[row], dArray[col]))
 
         # sum all the non-diagonal weights, then distracted by a vector with ones
@@ -118,11 +112,10 @@ class MultiPDP:
         thetaErrorTraj = list()
         idxIterMargin = 20
         for idxIter in range(int(paraDict["maxIter"])):
-            # for dynamic graph
-            if DYNAMIC_GRAPH_FLAG:
-                if abs(idxIter - 6) < 1E-2:
-                    self.adjacencyMat = adjacencyMat2
-                    self.generateMetropolisWeight()
+            # for dynamic periodic graph
+            if self.graphPeriodicFlag:
+                idxGraph = int(idxIter % len(self.adjacencyMatList))
+                self.generateMetropolisWeight(self.adjacencyMatList[idxGraph])
 
             # error among theta
             thetaErrorTraj.append(self.computeThetaError(thetaNowAll))
