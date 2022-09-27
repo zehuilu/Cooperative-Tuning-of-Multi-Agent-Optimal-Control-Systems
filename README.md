@@ -1,5 +1,18 @@
 # Cooperative Tuning of Multi-Agent Optimal Control Systems
-This is Cooperative Tuning of Multi-Agent Optimal Control Systems. We submitted the paper to IEEE L-CSS with the CDC option.
+This is Cooperative Tuning of Multi-Agent Optimal Control Systems. This paper was accepted by the 61st IEEE Conference on Decision and Control, 2022. The arxiv version is
+https://arxiv.org/abs/2209.12017
+
+Please cite us if you think this work is helpful. An IEEE version of citation information will be updated once it's available online.
+```
+@misc{https://doi.org/10.48550/arxiv.2209.12017,
+  doi = {10.48550/ARXIV.2209.12017},
+  url = {https://arxiv.org/abs/2209.12017},
+  author = {Lu, Zehui and Jin, Wanxin and Mou, Shaoshuai and Anderson, Brian D. O.},
+  title = {Cooperative Tuning of Multi-Agent Optimal Control Systems},
+  publisher = {arXiv},
+  year = {2022},
+}
+```
 
 This repo has been tested with:
 * Python 3.9.10, macOS 11.4
@@ -36,14 +49,14 @@ NOTE: All the class properties and methods must have the same names as those in 
 Example
 =======
 
-The simulation example in our paper is shown in [`run_MultiPDP_Unicycle.py`](/example/run_MultiPDP_Unicycle.py).
-```
-$ cd <MAIN_DIRECTORY>
-$ python3 example/run_MultiPDP_Unicycle.py
-```
-
 To test an optimal control with a self-defined dynamic system, see [`run_oc_Unicycle.py`](/example/run_oc_Unicycle.py).
 ```
 $ cd <MAIN_DIRECTORY>
 $ python3 example/run_oc_Unicycle.py
+```
+
+The simulation example in our paper is shown in [`run_MultiPDP_Unicycle.py`](/example/run_MultiPDP_Unicycle.py).
+```
+$ cd <MAIN_DIRECTORY>
+$ python3 example/run_MultiPDP_Unicycle.py
 ```
